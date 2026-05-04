@@ -86,7 +86,19 @@ impl SlackClient {
 
         if resp["ok"].as_bool() != Some(true) {
             let err = resp["error"].as_str().unwrap_or("unknown error");
-            return Err(Error::SlackApi(err.to_string()));
+            let detail = resp["response_metadata"]["messages"]
+                .as_array()
+                .map(|msgs| {
+                    msgs.iter()
+                        .filter_map(|m| m.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            if detail.is_empty() {
+                return Err(Error::SlackApi(err.to_string()));
+            }
+            return Err(Error::SlackApi(format!("{err}: {detail}")));
         }
 
         Ok(resp)
