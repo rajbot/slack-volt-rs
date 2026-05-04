@@ -2,10 +2,18 @@ use crate::request::{SlackAction, SlackCommand, SlackEvent, SlackViewSubmission}
 use crate::response::AckResponse;
 use crate::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SlackClient {
-    pub token: String,
+    token: String,
     http: reqwest::Client,
+}
+
+impl std::fmt::Debug for SlackClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlackClient")
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl SlackClient {
