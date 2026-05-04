@@ -74,7 +74,6 @@ pub fn static_select(action_id: &str, placeholder: &str, options: Vec<Value>) ->
 
 pub fn option(text: &str, value: &str) -> Value {
     json!({
-        "type": "option",
         "text": { "type": "plain_text", "text": text },
         "value": value
     })
