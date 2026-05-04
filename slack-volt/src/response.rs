@@ -35,6 +35,10 @@ impl AckResponse {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.text.is_none() && self.blocks.is_none() && self.response_type.is_none()
+    }
+
     pub fn blocks(blocks: Vec<serde_json::Value>) -> Self {
         AckResponse {
             text: None,

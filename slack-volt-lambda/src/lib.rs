@@ -33,12 +33,19 @@ async fn handle_request(
 
     match app.dispatch_async(&content_type, &body, headers).await {
         Ok(ack) => {
-            let response_body = serde_json::to_string(&ack)?;
-            let resp = Response::builder()
-                .status(200)
-                .header("content-type", "application/json")
-                .body(Body::Text(response_body))?;
-            Ok(resp)
+            if ack.is_empty() {
+                let resp = Response::builder()
+                    .status(200)
+                    .body(Body::Empty)?;
+                Ok(resp)
+            } else {
+                let response_body = serde_json::to_string(&ack)?;
+                let resp = Response::builder()
+                    .status(200)
+                    .header("content-type", "application/json")
+                    .body(Body::Text(response_body))?;
+                Ok(resp)
+            }
         }
         Err(slack_volt::Error::NoHandler { kind, id }) => {
             tracing::warn!(kind, id, "no handler registered");
