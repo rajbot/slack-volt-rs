@@ -150,4 +150,118 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("invalid timestamp"));
     }
+
+    #[test]
+    fn test_middleware_accepts_valid_request() {
+        let secret = "test_signing_secret";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string();
+        let body = "command=%2Fhello&text=world";
+        let sig = compute_signature(secret, &now, body);
+
+        let verifier = SignatureVerifier::new(secret.to_string());
+        let headers = Headers {
+            timestamp: now,
+            signature: sig,
+            content_type: "application/x-www-form-urlencoded".to_string(),
+        };
+        let result = verifier.process(&headers, body);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_signature_missing_v0_prefix() {
+        let verifier = SignatureVerifier::new("secret".to_string());
+        assert!(!verifier.verify("123", "body", "no_prefix_here"));
+    }
+
+    #[test]
+    fn test_signature_invalid_hex() {
+        let verifier = SignatureVerifier::new("secret".to_string());
+        assert!(!verifier.verify("123", "body", "v0=not_valid_hex_zzz"));
+    }
+
+    #[test]
+    fn test_middleware_rejects_empty_timestamp() {
+        let verifier = SignatureVerifier::new("secret".to_string());
+        let headers = Headers {
+            timestamp: String::new(),
+            signature: "v0=abc".to_string(),
+            content_type: "application/json".to_string(),
+        };
+        let result = verifier.process(&headers, "body");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_middleware_rejects_empty_signature() {
+        let secret = "secret";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string();
+        let verifier = SignatureVerifier::new(secret.to_string());
+        let headers = Headers {
+            timestamp: now,
+            signature: String::new(),
+            content_type: "application/json".to_string(),
+        };
+        let result = verifier.process(&headers, "body");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_timestamp_boundary_just_within_window() {
+        let secret = "secret";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let ts = (now - 299).to_string();
+        let body = "test";
+        let sig = compute_signature(secret, &ts, body);
+
+        let verifier = SignatureVerifier::new(secret.to_string());
+        let headers = Headers {
+            timestamp: ts,
+            signature: sig,
+            content_type: "text/plain".to_string(),
+        };
+        assert!(verifier.process(&headers, body).is_ok());
+    }
+
+    #[test]
+    fn test_timestamp_boundary_just_outside_window() {
+        let secret = "secret";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let ts = (now - 301).to_string();
+        let body = "test";
+        let sig = compute_signature(secret, &ts, body);
+
+        let verifier = SignatureVerifier::new(secret.to_string());
+        let headers = Headers {
+            timestamp: ts,
+            signature: sig,
+            content_type: "text/plain".to_string(),
+        };
+        let result = verifier.process(&headers, body);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_with_empty_body() {
+        let secret = "secret";
+        let ts = "1625000000";
+        let sig = compute_signature(secret, ts, "");
+
+        let verifier = SignatureVerifier::new(secret.to_string());
+        assert!(verifier.verify(ts, "", &sig));
+    }
 }

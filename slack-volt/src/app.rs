@@ -305,4 +305,148 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), crate::Error::NoHandler { .. }));
     }
+
+    #[tokio::test]
+    async fn test_app_multiple_commands() {
+        async fn handler_a(mut ctx: CommandContext) -> Result<AckResponse, crate::Error> {
+            Ok(ctx.ack("from A"))
+        }
+        async fn handler_b(mut ctx: CommandContext) -> Result<AckResponse, crate::Error> {
+            Ok(ctx.ack("from B"))
+        }
+
+        let app = App::new()
+            .command("/alpha", handler_a)
+            .command("/beta", handler_b)
+            .build();
+
+        let body_a = "command=%2Falpha&text=&user_id=U1&channel_id=C1&team_id=T1&trigger_id=tr1&user_name=u&channel_name=c&response_url=http%3A%2F%2Fex.com";
+        let body_b = "command=%2Fbeta&text=&user_id=U1&channel_id=C1&team_id=T1&trigger_id=tr1&user_name=u&channel_name=c&response_url=http%3A%2F%2Fex.com";
+
+        let result_a = app.dispatch_async("application/x-www-form-urlencoded", body_a, no_sig_headers()).await.unwrap();
+        let result_b = app.dispatch_async("application/x-www-form-urlencoded", body_b, no_sig_headers()).await.unwrap();
+
+        assert_eq!(result_a.text.as_deref(), Some("from A"));
+        assert_eq!(result_b.text.as_deref(), Some("from B"));
+    }
+
+    #[tokio::test]
+    async fn test_app_dispatches_event() {
+        async fn mention_handler(_ctx: crate::EventContext) -> Result<AckResponse, crate::Error> {
+            Ok(AckResponse::empty())
+        }
+
+        let app = App::new()
+            .event("app_mention", mention_handler)
+            .build();
+
+        let body = r#"{"team_id":"T1","event_id":"Ev1","event":{"type":"app_mention","text":"hi"}}"#;
+        let headers = Headers {
+            timestamp: String::new(),
+            signature: String::new(),
+            content_type: "application/json".to_string(),
+        };
+        let result = app.dispatch_async("application/json", body, headers).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_app_dispatches_action() {
+        async fn action_handler(mut ctx: crate::ActionContext) -> Result<AckResponse, crate::Error> {
+            Ok(ctx.ack())
+        }
+
+        let app = App::new()
+            .action("btn_click", action_handler)
+            .build();
+
+        let payload = r#"{"type":"block_actions","trigger_id":"tr1","user":{"id":"U1"},"actions":[{"action_id":"btn_click","type":"button"}]}"#;
+        let encoded = serde_urlencoded::to_string(&[("payload", payload)]).unwrap();
+        let result = app.dispatch_async("application/x-www-form-urlencoded", &encoded, no_sig_headers()).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_app_dispatches_view_submission() {
+        async fn view_handler(mut ctx: crate::ViewSubmissionContext) -> Result<AckResponse, crate::Error> {
+            Ok(ctx.ack())
+        }
+
+        let app = App::new()
+            .view_submission("my_form", view_handler)
+            .build();
+
+        let payload = r#"{"type":"view_submission","trigger_id":"tr1","user":{"id":"U1"},"view":{"id":"V1","callback_id":"my_form","state":{"values":{}},"private_metadata":""}}"#;
+        let encoded = serde_urlencoded::to_string(&[("payload", payload)]).unwrap();
+        let result = app.dispatch_async("application/x-www-form-urlencoded", &encoded, no_sig_headers()).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_app_with_signature_verification() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        let secret = "test_secret";
+        let app = App::new()
+            .signing_secret(secret)
+            .command("/hello", echo_handler)
+            .build();
+
+        let body = "command=%2Fhello&text=signed&user_id=U1&channel_id=C1&team_id=T1&trigger_id=tr1&user_name=u&channel_name=c&response_url=http%3A%2F%2Fex.com";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string();
+
+        let basestring = format!("v0:{now}:{body}");
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(basestring.as_bytes());
+        let sig = format!("v0={}", hex::encode(mac.finalize().into_bytes()));
+
+        let headers = Headers {
+            timestamp: now,
+            signature: sig,
+            content_type: "application/x-www-form-urlencoded".to_string(),
+        };
+        let result = app.dispatch_async("application/x-www-form-urlencoded", body, headers).await.unwrap();
+        assert_eq!(result.text.as_deref(), Some("echo: signed"));
+    }
+
+    #[tokio::test]
+    async fn test_app_rejects_bad_signature() {
+        let app = App::new()
+            .signing_secret("real_secret")
+            .command("/hello", echo_handler)
+            .build();
+
+        let body = "command=%2Fhello&text=x&user_id=U1&channel_id=C1&team_id=T1&trigger_id=tr1&user_name=u&channel_name=c&response_url=http%3A%2F%2Fex.com";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string();
+
+        let headers = Headers {
+            timestamp: now,
+            signature: "v0=badbadbadbad".to_string(),
+            content_type: "application/x-www-form-urlencoded".to_string(),
+        };
+        let result = app.dispatch_async("application/x-www-form-urlencoded", body, headers).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), crate::Error::SignatureVerification(_)));
+    }
+
+    #[tokio::test]
+    async fn test_app_parse_error_on_garbage_body() {
+        let app = App::new().build();
+        let headers = Headers {
+            timestamp: String::new(),
+            signature: String::new(),
+            content_type: "application/json".to_string(),
+        };
+        let result = app.dispatch_async("application/json", "{{invalid", headers).await;
+        assert!(result.is_err());
+    }
 }

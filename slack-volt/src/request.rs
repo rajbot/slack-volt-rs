@@ -280,6 +280,128 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[test]
+    fn test_parse_command_with_empty_text() {
+        let body = "command=%2Fhello&text=&user_id=U1&channel_id=C1&team_id=T1&trigger_id=tr1&user_name=u&channel_name=c&response_url=http%3A%2F%2Fexample.com";
+        let req = SlackRequest::parse("application/x-www-form-urlencoded", body).unwrap();
+        if let SlackRequest::Command(cmd) = req {
+            assert_eq!(cmd.text, "");
+        } else {
+            panic!("expected Command");
+        }
+    }
+
+    #[test]
+    fn test_parse_command_missing_optional_fields() {
+        let body = "command=%2Fhello";
+        let req = SlackRequest::parse("application/x-www-form-urlencoded", body).unwrap();
+        if let SlackRequest::Command(cmd) = req {
+            assert_eq!(cmd.command, "/hello");
+            assert_eq!(cmd.text, "");
+            assert_eq!(cmd.user_id, "");
+            assert_eq!(cmd.channel_id, "");
+        } else {
+            panic!("expected Command");
+        }
+    }
+
+    #[test]
+    fn test_parse_event_message() {
+        let body = r#"{"team_id":"T1","event_id":"Ev2","event":{"type":"message","channel":"C1","user":"U1","text":"hey","ts":"1625000000.000100"}}"#;
+        let req = SlackRequest::parse("application/json", body).unwrap();
+        if let SlackRequest::Event(evt) = req {
+            assert_eq!(evt.event_type, "message");
+            assert_eq!(evt.event["channel"], "C1");
+            assert_eq!(evt.event["ts"], "1625000000.000100");
+        } else {
+            panic!("expected Event");
+        }
+    }
+
+    #[test]
+    fn test_parse_action_multiple_actions() {
+        let payload = r#"{"type":"block_actions","trigger_id":"tr1","user":{"id":"U1"},"actions":[{"action_id":"first","type":"button"},{"action_id":"second","type":"static_select"}]}"#;
+        let body = format!("payload={}", urlencoded(payload));
+        let req = SlackRequest::parse("application/x-www-form-urlencoded", &body).unwrap();
+        if let SlackRequest::Action(act) = req {
+            assert_eq!(act.action_id, "first");
+            assert_eq!(act.actions.len(), 2);
+        } else {
+            panic!("expected Action");
+        }
+    }
+
+    #[test]
+    fn test_parse_action_without_channel() {
+        let payload = r#"{"type":"block_actions","trigger_id":"tr1","user":{"id":"U1"},"actions":[{"action_id":"act1","type":"button"}]}"#;
+        let body = format!("payload={}", urlencoded(payload));
+        let req = SlackRequest::parse("application/x-www-form-urlencoded", &body).unwrap();
+        if let SlackRequest::Action(act) = req {
+            assert!(act.channel.is_none());
+            assert!(act.response_url.is_none());
+        } else {
+            panic!("expected Action");
+        }
+    }
+
+    #[test]
+    fn test_parse_action_with_channel() {
+        let payload = r#"{"type":"block_actions","trigger_id":"tr1","user":{"id":"U1"},"channel":{"id":"C1","name":"general"},"actions":[{"action_id":"act1","type":"button"}]}"#;
+        let body = format!("payload={}", urlencoded(payload));
+        let req = SlackRequest::parse("application/x-www-form-urlencoded", &body).unwrap();
+        if let SlackRequest::Action(act) = req {
+            let ch = act.channel.unwrap();
+            assert_eq!(ch.id, "C1");
+            assert_eq!(ch.name.as_deref(), Some("general"));
+        } else {
+            panic!("expected Action");
+        }
+    }
+
+    #[test]
+    fn test_parse_view_submission_with_values() {
+        let payload = r#"{"type":"view_submission","trigger_id":"tr1","user":{"id":"U1"},"view":{"id":"V1","callback_id":"form1","state":{"values":{"block1":{"input1":{"type":"plain_text_input","value":"hello"}}}},"private_metadata":""}}"#;
+        let body = format!("payload={}", urlencoded(payload));
+        let req = SlackRequest::parse("application/x-www-form-urlencoded", &body).unwrap();
+        if let SlackRequest::ViewSubmission(vs) = req {
+            let values = vs.view.state.unwrap().values;
+            let val = &values["block1"]["input1"]["value"];
+            assert_eq!(val, "hello");
+        } else {
+            panic!("expected ViewSubmission");
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_json_body() {
+        let result = SlackRequest::parse("application/json", "{}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_empty_string_body() {
+        let result = SlackRequest::parse("application/json", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_url_verification_with_empty_challenge() {
+        let body = r#"{"challenge":"","token":"xyz"}"#;
+        let req = SlackRequest::parse("application/json", body).unwrap();
+        if let SlackRequest::UrlVerification { challenge } = req {
+            assert_eq!(challenge, "");
+        } else {
+            panic!("expected UrlVerification");
+        }
+    }
+
+    #[test]
+    fn test_content_type_with_charset() {
+        let body = "command=%2Fhello&text=test&user_id=U1&channel_id=C1&team_id=T1&trigger_id=tr1&user_name=u&channel_name=c&response_url=http%3A%2F%2Fex.com";
+        let req = SlackRequest::parse("application/x-www-form-urlencoded; charset=utf-8", body).unwrap();
+        assert!(matches!(req, SlackRequest::Command(_)));
+    }
+
     fn urlencoded(s: &str) -> String {
         serde_urlencoded::to_string(&[("", s)]).unwrap().strip_prefix('=').unwrap().to_string()
     }
