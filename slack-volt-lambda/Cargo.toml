@@ -1,0 +1,17 @@
+[package]
+name = "slack-volt-lambda"
+description = "AWS Lambda adapter for slack-volt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+slack-volt.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+lambda_http.workspace = true
+lambda_runtime.workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "hello_command"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+slack-volt.workspace = true
+slack-volt-lambda.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
