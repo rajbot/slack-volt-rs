@@ -7,14 +7,15 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/rajbot/slack-volt-rs"
 authors = ["Raj Kumar <raj@bitstream.io>"]
+readme = "README.md"
 
 [workspace.dependencies]
-slack-volt = { path = "slack-volt", version = "0.1.0" }
+slack-volt = { path = "slack-volt", version = "0.1.1" }
 slack-volt-lambda = { path = "slack-volt-lambda" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
