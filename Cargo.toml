@@ -14,7 +14,7 @@ repository = "https://github.com/rajbot/slack-volt-rs"
 authors = ["Raj Kumar <raj@bitstream.io>"]
 
 [workspace.dependencies]
-slack-volt = { path = "slack-volt" }
+slack-volt = { path = "slack-volt", version = "0.1.0" }
 slack-volt-lambda = { path = "slack-volt-lambda" }
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
