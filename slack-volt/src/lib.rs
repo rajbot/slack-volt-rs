@@ -9,7 +9,7 @@ mod response;
 pub mod blocks;
 
 pub use app::{App, AppBuilder};
-pub use context::{ActionContext, CommandContext, EventContext, ViewSubmissionContext};
+pub use context::{ActionContext, CommandContext, EventContext, SlackClient, ViewSubmissionContext};
 pub use error::Error;
 pub use handler::Handler;
 pub use middleware::Middleware;

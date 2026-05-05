@@ -5,7 +5,8 @@ use crate::Error;
 #[derive(Clone)]
 pub struct SlackClient {
     token: String,
-    http: reqwest::Client,
+    pub(crate) http: reqwest::Client,
+    base_url: String,
 }
 
 impl std::fmt::Debug for SlackClient {
@@ -18,9 +19,18 @@ impl std::fmt::Debug for SlackClient {
 
 impl SlackClient {
     pub fn new(token: String) -> Self {
+        Self::with_base_url(token, "https://slack.com/api".to_string())
+    }
+
+    pub fn with_base_url(token: String, base_url: String) -> Self {
+        Self::with_http(reqwest::Client::new(), token, base_url)
+    }
+
+    pub fn with_http(http: reqwest::Client, token: String, base_url: String) -> Self {
         SlackClient {
             token,
-            http: reqwest::Client::new(),
+            http,
+            base_url,
         }
     }
 
@@ -73,7 +83,7 @@ impl SlackClient {
         method: &str,
         body: &serde_json::Value,
     ) -> Result<serde_json::Value, Error> {
-        let url = format!("https://slack.com/api/{method}");
+        let url = format!("{}/{method}", self.base_url);
         let resp = self
             .http
             .post(&url)
@@ -148,8 +158,9 @@ impl CommandContext {
     }
 
     pub async fn respond(&self, text: &str) -> Result<(), Error> {
-        let http = reqwest::Client::new();
-        http.post(&self.command.response_url)
+        self.client
+            .http
+            .post(&self.command.response_url)
             .json(&serde_json::json!({ "text": text }))
             .send()
             .await?;
@@ -197,8 +208,9 @@ impl ActionContext {
 
     pub async fn respond(&self, text: &str) -> Result<(), Error> {
         if let Some(ref url) = self.action.response_url {
-            let http = reqwest::Client::new();
-            http.post(url)
+            self.client
+                .http
+                .post(url)
                 .json(&serde_json::json!({ "text": text }))
                 .send()
                 .await?;

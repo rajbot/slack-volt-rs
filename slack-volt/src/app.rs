@@ -22,11 +22,17 @@ pub struct App {
     pub(crate) view_submissions: HashMap<String, Arc<BoxedViewHandler>>,
     pub(crate) middleware: Vec<Box<dyn Middleware>>,
     pub(crate) bot_token: String,
+    pub(crate) slack_api_base_url: String,
+    pub(crate) http: reqwest::Client,
 }
 
 impl App {
     pub fn new() -> AppBuilder {
         AppBuilder::default()
+    }
+
+    fn make_client(&self) -> SlackClient {
+        SlackClient::with_http(self.http.clone(), self.bot_token.clone(), self.slack_api_base_url.clone())
     }
 
     pub fn dispatch(
@@ -53,7 +59,7 @@ impl App {
                         id: cmd.command.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = CommandContext::new(cmd, client);
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(handler.call(ctx))
@@ -68,7 +74,7 @@ impl App {
                         id: evt.event_type.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = EventContext::new(evt, client);
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(handler.call(ctx))
@@ -83,7 +89,7 @@ impl App {
                         id: act.action_id.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = ActionContext::new(act, client);
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(handler.call(ctx))
@@ -98,7 +104,7 @@ impl App {
                         id: vs.callback_id.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = ViewSubmissionContext::new(vs, client);
                 tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(handler.call(ctx))
@@ -131,7 +137,7 @@ impl App {
                         id: cmd.command.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = CommandContext::new(cmd, client);
                 handler.call(ctx).await
             }
@@ -144,7 +150,7 @@ impl App {
                         id: evt.event_type.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = EventContext::new(evt, client);
                 handler.call(ctx).await
             }
@@ -157,7 +163,7 @@ impl App {
                         id: act.action_id.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = ActionContext::new(act, client);
                 handler.call(ctx).await
             }
@@ -170,7 +176,7 @@ impl App {
                         id: vs.callback_id.clone(),
                     })?
                     .clone();
-                let client = SlackClient::new(self.bot_token.clone());
+                let client = self.make_client();
                 let ctx = ViewSubmissionContext::new(vs, client);
                 handler.call(ctx).await
             }
@@ -186,6 +192,7 @@ pub struct AppBuilder {
     view_submissions: HashMap<String, Arc<BoxedViewHandler>>,
     signing_secret: Option<String>,
     bot_token: Option<String>,
+    slack_api_base_url: Option<String>,
 }
 
 impl AppBuilder {
@@ -227,6 +234,11 @@ impl AppBuilder {
         self
     }
 
+    pub fn slack_api_base_url(mut self, url: impl Into<String>) -> Self {
+        self.slack_api_base_url = Some(url.into());
+        self
+    }
+
     pub fn build(self) -> App {
         let mut middleware: Vec<Box<dyn Middleware>> = Vec::new();
 
@@ -241,6 +253,8 @@ impl AppBuilder {
             view_submissions: self.view_submissions,
             middleware,
             bot_token: self.bot_token.unwrap_or_default(),
+            slack_api_base_url: self.slack_api_base_url.unwrap_or_else(|| "https://slack.com/api".to_string()),
+            http: reqwest::Client::new(),
         }
     }
 }
