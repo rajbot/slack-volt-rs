@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use slack_volt::middleware::Headers;
