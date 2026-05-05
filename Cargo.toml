@@ -16,6 +16,7 @@ authors = ["Raj Kumar <raj@bitstream.io>"]
 [workspace.dependencies]
 slack-volt = { path = "slack-volt" }
 slack-volt-lambda = { path = "slack-volt-lambda" }
+async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

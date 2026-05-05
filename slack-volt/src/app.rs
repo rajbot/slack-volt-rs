@@ -5,6 +5,7 @@ use crate::context::{
     ActionContext, CommandContext, EventContext, SlackClient, ViewSubmissionContext,
 };
 use crate::handler::Handler;
+use crate::installation::InstallationStore;
 use crate::middleware::{Headers, Middleware, SignatureVerifier};
 use crate::request::SlackRequest;
 use crate::response::AckResponse;
@@ -24,6 +25,7 @@ pub struct App {
     pub(crate) bot_token: String,
     pub(crate) slack_api_base_url: String,
     pub(crate) http: reqwest::Client,
+    pub(crate) installation_store: Option<Arc<dyn InstallationStore>>,
 }
 
 impl App {
@@ -35,82 +37,25 @@ impl App {
         SlackClient::with_http(self.http.clone(), self.bot_token.clone(), self.slack_api_base_url.clone())
     }
 
+    async fn resolve_client(&self, team_id: &str) -> Result<SlackClient, Error> {
+        if let Some(ref store) = self.installation_store {
+            let token = store.fetch_bot_token(team_id).await?;
+            Ok(SlackClient::with_http(self.http.clone(), token, self.slack_api_base_url.clone()))
+        } else {
+            Ok(self.make_client())
+        }
+    }
+
     pub fn dispatch(
         &self,
         content_type: &str,
         body: &str,
         headers: Headers,
     ) -> Result<AckResponse, Error> {
-        for mw in &self.middleware {
-            mw.process(&headers, body)?;
-        }
-
-        let request = SlackRequest::parse(content_type, body)?;
-        match request {
-            SlackRequest::UrlVerification { challenge } => {
-                Ok(AckResponse::text(challenge))
-            }
-            SlackRequest::Command(cmd) => {
-                let handler = self
-                    .commands
-                    .get(&cmd.command)
-                    .ok_or_else(|| Error::NoHandler {
-                        kind: "command",
-                        id: cmd.command.clone(),
-                    })?
-                    .clone();
-                let client = self.make_client();
-                let ctx = CommandContext::new(cmd, client);
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(handler.call(ctx))
-                })
-            }
-            SlackRequest::Event(evt) => {
-                let handler = self
-                    .events
-                    .get(&evt.event_type)
-                    .ok_or_else(|| Error::NoHandler {
-                        kind: "event",
-                        id: evt.event_type.clone(),
-                    })?
-                    .clone();
-                let client = self.make_client();
-                let ctx = EventContext::new(evt, client);
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(handler.call(ctx))
-                })
-            }
-            SlackRequest::Action(act) => {
-                let handler = self
-                    .actions
-                    .get(&act.action_id)
-                    .ok_or_else(|| Error::NoHandler {
-                        kind: "action",
-                        id: act.action_id.clone(),
-                    })?
-                    .clone();
-                let client = self.make_client();
-                let ctx = ActionContext::new(act, client);
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(handler.call(ctx))
-                })
-            }
-            SlackRequest::ViewSubmission(vs) => {
-                let handler = self
-                    .view_submissions
-                    .get(&vs.callback_id)
-                    .ok_or_else(|| Error::NoHandler {
-                        kind: "view_submission",
-                        id: vs.callback_id.clone(),
-                    })?
-                    .clone();
-                let client = self.make_client();
-                let ctx = ViewSubmissionContext::new(vs, client);
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(handler.call(ctx))
-                })
-            }
-        }
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.dispatch_async(content_type, body, headers))
+        })
     }
 
     pub async fn dispatch_async(
@@ -137,7 +82,7 @@ impl App {
                         id: cmd.command.clone(),
                     })?
                     .clone();
-                let client = self.make_client();
+                let client = self.resolve_client(&cmd.team_id).await?;
                 let ctx = CommandContext::new(cmd, client);
                 handler.call(ctx).await
             }
@@ -150,7 +95,7 @@ impl App {
                         id: evt.event_type.clone(),
                     })?
                     .clone();
-                let client = self.make_client();
+                let client = self.resolve_client(&evt.team_id).await?;
                 let ctx = EventContext::new(evt, client);
                 handler.call(ctx).await
             }
@@ -163,7 +108,7 @@ impl App {
                         id: act.action_id.clone(),
                     })?
                     .clone();
-                let client = self.make_client();
+                let client = self.resolve_client(&act.team_id).await?;
                 let ctx = ActionContext::new(act, client);
                 handler.call(ctx).await
             }
@@ -176,7 +121,7 @@ impl App {
                         id: vs.callback_id.clone(),
                     })?
                     .clone();
-                let client = self.make_client();
+                let client = self.resolve_client(&vs.team_id).await?;
                 let ctx = ViewSubmissionContext::new(vs, client);
                 handler.call(ctx).await
             }
@@ -193,6 +138,7 @@ pub struct AppBuilder {
     signing_secret: Option<String>,
     bot_token: Option<String>,
     slack_api_base_url: Option<String>,
+    installation_store: Option<Arc<dyn InstallationStore>>,
 }
 
 impl AppBuilder {
@@ -239,6 +185,11 @@ impl AppBuilder {
         self
     }
 
+    pub fn installation_store(mut self, store: Arc<dyn InstallationStore>) -> Self {
+        self.installation_store = Some(store);
+        self
+    }
+
     pub fn build(self) -> App {
         let mut middleware: Vec<Box<dyn Middleware>> = Vec::new();
 
@@ -255,6 +206,7 @@ impl AppBuilder {
             bot_token: self.bot_token.unwrap_or_default(),
             slack_api_base_url: self.slack_api_base_url.unwrap_or_else(|| "https://slack.com/api".to_string()),
             http: reqwest::Client::new(),
+            installation_store: self.installation_store,
         }
     }
 }

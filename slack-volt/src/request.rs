@@ -33,6 +33,7 @@ pub struct SlackEvent {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SlackAction {
+    pub team_id: String,
     pub action_id: String,
     pub trigger_id: String,
     pub user: SlackUser,
@@ -43,6 +44,7 @@ pub struct SlackAction {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SlackViewSubmission {
+    pub team_id: String,
     pub callback_id: String,
     pub trigger_id: String,
     pub user: SlackUser,
@@ -115,6 +117,8 @@ impl SlackRequest {
         let v: serde_json::Value = serde_json::from_str(payload)?;
         let payload_type = v["type"].as_str().unwrap_or("");
 
+        let team_id = v["team"]["id"].as_str().unwrap_or("").to_string();
+
         match payload_type {
             "block_actions" => {
                 let action_id = v["actions"][0]["action_id"]
@@ -122,6 +126,7 @@ impl SlackRequest {
                     .unwrap_or("")
                     .to_string();
                 Ok(SlackRequest::Action(SlackAction {
+                    team_id: team_id.clone(),
                     action_id,
                     trigger_id: v["trigger_id"].as_str().unwrap_or("").to_string(),
                     user: serde_json::from_value(v["user"].clone())
@@ -137,6 +142,7 @@ impl SlackRequest {
                     .unwrap_or("")
                     .to_string();
                 Ok(SlackRequest::ViewSubmission(SlackViewSubmission {
+                    team_id,
                     callback_id,
                     trigger_id: v["trigger_id"].as_str().unwrap_or("").to_string(),
                     user: serde_json::from_value(v["user"].clone())
