@@ -391,7 +391,7 @@ checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 
 [[package]]
 name = "hello_command"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "slack-volt",
  "slack-volt-lambda",
@@ -1307,7 +1307,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slack-volt"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "hex",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "slack-volt-lambda"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "lambda_http",
  "lambda_runtime",

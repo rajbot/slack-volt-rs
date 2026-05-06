@@ -2,7 +2,6 @@ use lambda_http::{Body, Request, Response, run, service_fn};
 use slack_volt::App;
 use slack_volt::middleware::Headers;
 use std::sync::Arc;
-use tracing;
 
 pub struct LambdaAdapter;
 

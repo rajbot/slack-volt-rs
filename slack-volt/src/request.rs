@@ -409,6 +409,6 @@ mod tests {
     }
 
     fn urlencoded(s: &str) -> String {
-        serde_urlencoded::to_string(&[("", s)]).unwrap().strip_prefix('=').unwrap().to_string()
+        serde_urlencoded::to_string([("", s)]).unwrap().strip_prefix('=').unwrap().to_string()
     }
 }

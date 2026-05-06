@@ -47,7 +47,7 @@ pub fn sign_request_with_timestamp(body: &str, timestamp: u64) -> Headers {
 }
 
 pub fn command_body(command: &str, text: &str, response_url: &str) -> String {
-    serde_urlencoded::to_string(&[
+    serde_urlencoded::to_string([
         ("command", command),
         ("text", text),
         ("user_id", "U_TEST"),
@@ -71,7 +71,7 @@ pub fn action_body(action_id: &str, response_url: Option<&str>) -> String {
     if let Some(url) = response_url {
         payload["response_url"] = serde_json::Value::String(url.to_string());
     }
-    serde_urlencoded::to_string(&[("payload", serde_json::to_string(&payload).unwrap())]).unwrap()
+    serde_urlencoded::to_string([("payload", serde_json::to_string(&payload).unwrap())]).unwrap()
 }
 
 pub fn view_submission_body(callback_id: &str, values: serde_json::Value) -> String {
@@ -86,7 +86,7 @@ pub fn view_submission_body(callback_id: &str, values: serde_json::Value) -> Str
             "private_metadata": ""
         }
     });
-    serde_urlencoded::to_string(&[("payload", serde_json::to_string(&payload).unwrap())]).unwrap()
+    serde_urlencoded::to_string([("payload", serde_json::to_string(&payload).unwrap())]).unwrap()
 }
 
 pub fn event_body(event_type: &str, extra: serde_json::Value) -> String {

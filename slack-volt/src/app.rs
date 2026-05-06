@@ -29,6 +29,7 @@ pub struct App {
 }
 
 impl App {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> AppBuilder {
         AppBuilder::default()
     }
@@ -327,7 +328,7 @@ mod tests {
             .build();
 
         let payload = r#"{"type":"block_actions","trigger_id":"tr1","user":{"id":"U1"},"actions":[{"action_id":"btn_click","type":"button"}]}"#;
-        let encoded = serde_urlencoded::to_string(&[("payload", payload)]).unwrap();
+        let encoded = serde_urlencoded::to_string([("payload", payload)]).unwrap();
         let result = app.dispatch_async("application/x-www-form-urlencoded", &encoded, no_sig_headers()).await;
         assert!(result.is_ok());
     }
@@ -343,7 +344,7 @@ mod tests {
             .build();
 
         let payload = r#"{"type":"view_submission","trigger_id":"tr1","user":{"id":"U1"},"view":{"id":"V1","callback_id":"my_form","state":{"values":{}},"private_metadata":""}}"#;
-        let encoded = serde_urlencoded::to_string(&[("payload", payload)]).unwrap();
+        let encoded = serde_urlencoded::to_string([("payload", payload)]).unwrap();
         let result = app.dispatch_async("application/x-www-form-urlencoded", &encoded, no_sig_headers()).await;
         assert!(result.is_ok());
     }
