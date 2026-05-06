@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use crate::request::{SlackAction, SlackCommand, SlackEvent, SlackViewSubmission};
 use crate::response::AckResponse;
 use crate::Error;
 
 #[derive(Clone)]
 pub struct SlackClient {
-    token: String,
+    token: Arc<str>,
     http: reqwest::Client,
-    base_url: String,
+    base_url: Arc<str>,
 }
 
 impl std::fmt::Debug for SlackClient {
@@ -18,19 +20,19 @@ impl std::fmt::Debug for SlackClient {
 }
 
 impl SlackClient {
-    pub fn new(token: String) -> Self {
-        Self::with_base_url(token, "https://slack.com/api".to_string())
+    pub fn new(token: impl Into<Arc<str>>) -> Self {
+        Self::with_base_url(token, "https://slack.com/api")
     }
 
-    pub fn with_base_url(token: String, base_url: String) -> Self {
+    pub fn with_base_url(token: impl Into<Arc<str>>, base_url: impl Into<Arc<str>>) -> Self {
         Self::with_http(reqwest::Client::new(), token, base_url)
     }
 
-    pub fn with_http(http: reqwest::Client, token: String, base_url: String) -> Self {
+    pub fn with_http(http: reqwest::Client, token: impl Into<Arc<str>>, base_url: impl Into<Arc<str>>) -> Self {
         SlackClient {
-            token,
+            token: token.into(),
             http,
-            base_url,
+            base_url: base_url.into(),
         }
     }
 

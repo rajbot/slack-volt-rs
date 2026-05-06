@@ -22,8 +22,8 @@ pub struct App {
     pub(crate) actions: HashMap<String, Arc<BoxedActionHandler>>,
     pub(crate) view_submissions: HashMap<String, Arc<BoxedViewHandler>>,
     pub(crate) middleware: Vec<Box<dyn Middleware>>,
-    pub(crate) bot_token: String,
-    pub(crate) slack_api_base_url: String,
+    pub(crate) bot_token: Arc<str>,
+    pub(crate) slack_api_base_url: Arc<str>,
     pub(crate) http: reqwest::Client,
     pub(crate) installation_store: Option<Arc<dyn InstallationStore>>,
 }
@@ -40,7 +40,7 @@ impl App {
 
     async fn resolve_client(&self, team_id: &str) -> Result<SlackClient, Error> {
         if let Some(ref store) = self.installation_store {
-            let token = store.fetch_bot_token(team_id).await?;
+            let token: Arc<str> = store.fetch_bot_token(team_id).await?.into();
             Ok(SlackClient::with_http(self.http.clone(), token, self.slack_api_base_url.clone()))
         } else {
             Ok(self.make_client())
@@ -181,6 +181,7 @@ impl AppBuilder {
         self
     }
 
+    #[doc(hidden)]
     pub fn slack_api_base_url(mut self, url: impl Into<String>) -> Self {
         self.slack_api_base_url = Some(url.into());
         self
@@ -204,8 +205,8 @@ impl AppBuilder {
             actions: self.actions,
             view_submissions: self.view_submissions,
             middleware,
-            bot_token: self.bot_token.unwrap_or_default(),
-            slack_api_base_url: self.slack_api_base_url.unwrap_or_else(|| "https://slack.com/api".to_string()),
+            bot_token: Arc::from(self.bot_token.unwrap_or_default()),
+            slack_api_base_url: Arc::from(self.slack_api_base_url.unwrap_or_else(|| "https://slack.com/api".to_string())),
             http: reqwest::Client::new(),
             installation_store: self.installation_store,
         }
