@@ -5,7 +5,7 @@ use crate::Error;
 #[derive(Clone)]
 pub struct SlackClient {
     token: String,
-    pub(crate) http: reqwest::Client,
+    http: reqwest::Client,
     base_url: String,
 }
 
@@ -113,6 +113,11 @@ impl SlackClient {
 
         Ok(resp)
     }
+
+    pub async fn post_to_url(&self, url: &str, body: &serde_json::Value) -> Result<(), Error> {
+        self.http.post(url).json(body).send().await?;
+        Ok(())
+    }
 }
 
 pub struct CommandContext {
@@ -159,12 +164,8 @@ impl CommandContext {
 
     pub async fn respond(&self, text: &str) -> Result<(), Error> {
         self.client
-            .http
-            .post(&self.command.response_url)
-            .json(&serde_json::json!({ "text": text }))
-            .send()
-            .await?;
-        Ok(())
+            .post_to_url(&self.command.response_url, &serde_json::json!({ "text": text }))
+            .await
     }
 
     pub async fn open_modal(&self, view: serde_json::Value) -> Result<(), Error> {
@@ -209,10 +210,7 @@ impl ActionContext {
     pub async fn respond(&self, text: &str) -> Result<(), Error> {
         if let Some(ref url) = self.action.response_url {
             self.client
-                .http
-                .post(url)
-                .json(&serde_json::json!({ "text": text }))
-                .send()
+                .post_to_url(url, &serde_json::json!({ "text": text }))
                 .await?;
         }
         Ok(())
