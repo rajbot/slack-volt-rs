@@ -117,6 +117,9 @@ impl SlackClient {
     }
 
     pub async fn post_to_url(&self, url: &str, body: &serde_json::Value) -> Result<(), Error> {
+        if !is_valid_slack_url(url) {
+            return Err(Error::Parse(format!("invalid response_url domain: {url}")));
+        }
         self.http.post(url).json(body).send().await?;
         Ok(())
     }
@@ -269,4 +272,20 @@ impl ViewSubmissionContext {
     pub fn private_metadata(&self) -> Option<&str> {
         self.submission.view.private_metadata.as_deref()
     }
+}
+
+fn is_valid_slack_url(url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    if host == "127.0.0.1" || host == "localhost" {
+        return true;
+    }
+    if parsed.scheme() != "https" {
+        return false;
+    }
+    host == "slack.com" || host.ends_with(".slack.com")
 }

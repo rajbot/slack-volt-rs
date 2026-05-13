@@ -199,6 +199,8 @@ impl AppBuilder {
             middleware.push(Box::new(SignatureVerifier::new(secret)));
         }
 
+        let base_url = self.slack_api_base_url.unwrap_or_else(|| "https://slack.com/api".to_string());
+
         App {
             commands: self.commands,
             events: self.events,
@@ -206,7 +208,7 @@ impl AppBuilder {
             view_submissions: self.view_submissions,
             middleware,
             bot_token: Arc::from(self.bot_token.unwrap_or_default()),
-            slack_api_base_url: Arc::from(self.slack_api_base_url.unwrap_or_else(|| "https://slack.com/api".to_string())),
+            slack_api_base_url: Arc::from(base_url),
             http: reqwest::Client::new(),
             installation_store: self.installation_store,
         }

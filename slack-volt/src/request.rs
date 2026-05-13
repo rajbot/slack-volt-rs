@@ -10,7 +10,7 @@ pub enum SlackRequest {
     UrlVerification { challenge: String },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct SlackCommand {
     pub command: String,
     pub text: String,
@@ -23,6 +23,20 @@ pub struct SlackCommand {
     pub response_url: String,
 }
 
+impl std::fmt::Debug for SlackCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlackCommand")
+            .field("command", &self.command)
+            .field("text", &self.text)
+            .field("trigger_id", &"[REDACTED]")
+            .field("user_id", &self.user_id)
+            .field("channel_id", &self.channel_id)
+            .field("team_id", &self.team_id)
+            .field("response_url", &"[REDACTED]")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SlackEvent {
     pub event_type: String,
@@ -31,7 +45,7 @@ pub struct SlackEvent {
     pub event_id: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct SlackAction {
     pub team_id: String,
     pub action_id: String,
@@ -42,13 +56,37 @@ pub struct SlackAction {
     pub actions: Vec<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+impl std::fmt::Debug for SlackAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlackAction")
+            .field("team_id", &self.team_id)
+            .field("action_id", &self.action_id)
+            .field("trigger_id", &"[REDACTED]")
+            .field("user", &self.user)
+            .field("channel", &self.channel)
+            .field("response_url", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct SlackViewSubmission {
     pub team_id: String,
     pub callback_id: String,
     pub trigger_id: String,
     pub user: SlackUser,
     pub view: SlackView,
+}
+
+impl std::fmt::Debug for SlackViewSubmission {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlackViewSubmission")
+            .field("team_id", &self.team_id)
+            .field("callback_id", &self.callback_id)
+            .field("trigger_id", &"[REDACTED]")
+            .field("user", &self.user)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -77,8 +115,17 @@ pub struct SlackViewState {
     pub values: HashMap<String, HashMap<String, serde_json::Value>>,
 }
 
+const MAX_BODY_SIZE: usize = 1_048_576; // 1 MB
+
 impl SlackRequest {
     pub fn parse(content_type: &str, body: &str) -> Result<Self, crate::Error> {
+        if body.len() > MAX_BODY_SIZE {
+            return Err(crate::Error::Parse(format!(
+                "request body too large: {} bytes (max {})",
+                body.len(),
+                MAX_BODY_SIZE
+            )));
+        }
         if content_type.contains("application/x-www-form-urlencoded") {
             Self::parse_form(body)
         } else {
@@ -95,15 +142,22 @@ impl SlackRequest {
         }
 
         if let Some(command) = params.get("command") {
+            let user_id = params.get("user_id").cloned().unwrap_or_default();
+            let team_id = params.get("team_id").cloned().unwrap_or_default();
+            if user_id.is_empty() || team_id.is_empty() {
+                return Err(crate::Error::Parse(
+                    "missing required fields: user_id, team_id".to_string(),
+                ));
+            }
             return Ok(SlackRequest::Command(SlackCommand {
                 command: command.clone(),
                 text: params.get("text").cloned().unwrap_or_default(),
                 trigger_id: params.get("trigger_id").cloned().unwrap_or_default(),
-                user_id: params.get("user_id").cloned().unwrap_or_default(),
+                user_id,
                 user_name: params.get("user_name").cloned().unwrap_or_default(),
                 channel_id: params.get("channel_id").cloned().unwrap_or_default(),
                 channel_name: params.get("channel_name").cloned().unwrap_or_default(),
-                team_id: params.get("team_id").cloned().unwrap_or_default(),
+                team_id,
                 response_url: params.get("response_url").cloned().unwrap_or_default(),
             }));
         }
@@ -298,17 +352,11 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_command_missing_optional_fields() {
+    fn test_parse_command_missing_required_fields() {
         let body = "command=%2Fhello";
-        let req = SlackRequest::parse("application/x-www-form-urlencoded", body).unwrap();
-        if let SlackRequest::Command(cmd) = req {
-            assert_eq!(cmd.command, "/hello");
-            assert_eq!(cmd.text, "");
-            assert_eq!(cmd.user_id, "");
-            assert_eq!(cmd.channel_id, "");
-        } else {
-            panic!("expected Command");
-        }
+        let result = SlackRequest::parse("application/x-www-form-urlencoded", body);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing required fields"));
     }
 
     #[test]
